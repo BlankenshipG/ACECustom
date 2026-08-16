@@ -549,15 +549,15 @@ namespace ACE.Server.WorldObjects
                     tryBoost = boost = reduced;
                 }
             }
-            // Normally, LuminanceAugmentLifeCount adds a flat bonus to all Boost spell damage/healing.
+            // Normally, life augs (gem count + Triune Weave) add a flat bonus to all Boost spell damage/healing.
             // When useHarmCap is active, we skip this so the damage stays within the spell's fixed raw range.
-            if (!useHarmCap && player != null && player.LuminanceAugmentLifeCount.HasValue && tryBoost > 0)
+            if (!useHarmCap && player != null && tryBoost > 0)
             {
-                tryBoost += (int)player.LuminanceAugmentLifeCount;
+                tryBoost += (int)player.EffectiveLifeAugCount;
             }
-            if (!useHarmCap && player != null && player.LuminanceAugmentLifeCount.HasValue && tryBoost < 0)
+            if (!useHarmCap && player != null && tryBoost < 0)
             {
-                tryBoost -= (int)player.LuminanceAugmentLifeCount;
+                tryBoost -= (int)player.EffectiveLifeAugCount;
             }
 
             string srcVital;
@@ -646,7 +646,7 @@ namespace ACE.Server.WorldObjects
 
             if (player != null && minBoostValue < 0 && spell.VitalDamageType == DamageType.Health)
             {
-                var lumBonus = !useHarmCap && player.LuminanceAugmentLifeCount.HasValue ? (int)player.LuminanceAugmentLifeCount.Value : 0;
+                var lumBonus = !useHarmCap ? (int)player.EffectiveLifeAugCount : 0;
                 log.Debug($"[HARM_CAP] {player.Name} -> {targetCreature.Name} | spell: {spell.Name} | lumBonus: {lumBonus} | tryBoost: {tryBoostAfterAugment} | finalBoost: {boost} | targetHP: {targetCreature.Health.Current}/{targetCreature.Health.MaxValue}");
             }
 
@@ -896,26 +896,15 @@ namespace ACE.Server.WorldObjects
                 }
             }
 
-            if (player != null && player.LuminanceAugmentLifeCount.HasValue)
+            if (player != null)
             {
+                // Only boost a transfer that is actually moving something. These are unsigned
+                // magnitudes, so subtracting from a zero change wraps to ~uint.MaxValue.
                 if (srcVitalChange > 0)
-                {
-                    srcVitalChange += (uint)player.LuminanceAugmentLifeCount;
-                }
-                else
-                {
-                    srcVitalChange -= (uint)player.LuminanceAugmentLifeCount;
-                }
+                    srcVitalChange += (uint)player.EffectiveLifeAugCount;
 
                 if (destVitalChange > 0)
-                {
-                    destVitalChange += (uint)player.LuminanceAugmentLifeCount;
-                }
-                else
-                {
-                    destVitalChange -= (uint)player.LuminanceAugmentLifeCount;
-                }
-
+                    destVitalChange += (uint)player.EffectiveLifeAugCount;
             }
 
             string srcVital, destVital;
@@ -1092,10 +1081,12 @@ namespace ACE.Server.WorldObjects
 
             // For ring spells cast by a player, apply guaranteed radius-based area damage
             // unless the player has opted into Classic mode (physics collision / multi-hit).
+            // `damage` is the vital drained above for LifeProjectile spells (0 otherwise) — it must be
+            // forwarded, since those spells derive their damage from the drain and not from Min/Max.
             if (SpellProjectile.GetProjectileSpellType(spell.Id) == ProjectileSpellType.Ring
                 && this is Player ringPlayer
                 && !(ringPlayer.GetProperty(PropertyBool.ClassicRingAoe) ?? false))
-                ringPlayer.ApplyRingSpellAreaDamage(spell);
+                ringPlayer.ApplyRingSpellAreaDamage(spell, lifeProjectileDamage: damage);
 
             if (spell.School == MagicSchool.LifeMagic)
             {
@@ -2264,15 +2255,15 @@ namespace ACE.Server.WorldObjects
             {
                 if (spell.School == MagicSchool.VoidMagic)
                 {
-                    lumAug += player.LuminanceAugmentVoidCount ?? 0f;
+                    lumAug += player.EffectiveVoidAugCount;
                 }
                 if (spell.School == MagicSchool.WarMagic)
                 {
-                    lumAug += player.LuminanceAugmentWarCount ?? 0f;
+                    lumAug += player.EffectiveWarAugCount;
                 }
                 if (spell.School == MagicSchool.LifeMagic)
                 {
-                    lumAug += player.LuminanceAugmentLifeCount ?? 0f;
+                    lumAug += player.EffectiveLifeAugCount;
                 }
                 lumAug *= 0.01f;
             }
